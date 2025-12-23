@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dantesworld 3D Card Viewer</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+
+  <body>
+    <!-- Start Menu (shown on page load) -->
+    <div id="startMenu" class="start-menu">
+      <div class="start-menu-content">
+        <img class="start-logo" src="./logo.png" alt="Dantesworld logo" />
+        <h1 class="start-title">DANTESWORLD</h1>
+        <p class="start-subtitle">3D Card Viewer</p>
+        
+        <div class="start-buttons">
+          <button class="start-btn primary-start" id="btnStartViewer">
+            <span class="btn-icon">🃏</span>
+            <span>OPEN CARD VIEWER</span>
+          </button>
+          <button class="start-btn" id="btnImportCollection">
+            <span class="btn-icon">📦</span>
+            <span>IMPORT COLLECTION</span>
+          </button>
+          <button class="start-btn" id="btnSettingsStart">
+            <span class="btn-icon">⚙️</span>
+            <span>SETTINGS</span>
+          </button>
+        </div>
+        
+        <div class="start-footer">
+          <p>Holographic 3D Card Viewer • @dantes20worlds</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="settings-modal">
+      <div class="settings-content">
+        <div class="settings-header">
+          <h2>⚙️ Settings</h2>
+          <button class="close-btn" id="btnCloseSettings">✕</button>
+        </div>
+
+        <div class="settings-body">
+          <!-- Audio Settings -->
+          <div class="settings-section">
+            <h3>🔊 Audio</h3>
+            
+            <div class="setting-item">
+              <label for="musicVolume">Music Volume</label>
+              <div class="slider-container">
+                <input type="range" id="musicVolume" min="0" max="100" value="35" class="slider" />
+                <span class="slider-value" id="musicVolumeValue">35%</span>
+              </div>
+            </div>
+
+            <div class="setting-item">
+              <label for="sfxVolume">SFX Volume</label>
+              <div class="slider-container">
+                <input type="range" id="sfxVolume" min="0" max="100" value="80" class="slider" />
+                <span class="slider-value" id="sfxVolumeValue">80%</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Graphics Settings -->
+          <div class="settings-section">
+            <h3>🎨 Graphics</h3>
+            
+            <div class="setting-item">
+              <label for="graphicsQuality">Quality</label>
+              <select id="graphicsQuality" class="settings-select">
+                <option value="low">Low (Better Performance)</option>
+                <option value="medium">Medium</option>
+                <option value="high" selected>High (Best Quality)</option>
+                <option value="ultra">Ultra (Best Visual)</option>
+              </select>
+            </div>
+
+            <div class="setting-item">
+              <label for="foilIntensity">Holographic Foil Intensity</label>
+              <div class="slider-container">
+                <input type="range" id="foilIntensity" min="0" max="100" value="85" class="slider" />
+                <span class="slider-value" id="foilIntensityValue">85%</span>
+              </div>
+            </div>
+
+            <div class="setting-item">
+              <label class="checkbox-label">
+                <input type="checkbox" id="antialiasing" checked />
+                <span>Anti-aliasing</span>
+              </label>
+            </div>
+
+            <div class="setting-item">
+              <label class="checkbox-label">
+                <input type="checkbox" id="shadows" checked />
+                <span>Shadows</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Info -->
+          <div class="settings-section">
+            <div class="settings-info">
+              <p><strong>Track:</strong> Dante's World - Dark Void</p>
+              <p><strong>Renderer:</strong> Three.js WebGL</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-footer">
+          <button class="btn primary" id="btnApplySettings">Apply Settings</button>
+          <button class="btn" id="btnResetSettings">Reset to Default</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="app">
+      <header class="topbar">
+        <div class="leftBrand">
+          <img class="logo" src="./logo.png" alt="Dantesworld logo" />
+          <div class="brandText">
+            <div class="brandTitle">Dantesworld</div>
+            <div class="brandSub">3D Card Viewer</div>
+          </div>
+        </div>
+
+        <!-- Desktop controls -->
+        <nav class="menu" aria-label="Main menu">
+          <button class="menuBtn" id="btnOpenUploader" type="button">Upload Images</button>
+          <button class="menuBtn" id="btnReset" type="button">Reset</button>
+          <button class="menuBtn" id="btnAuto" type="button">Auto-Rotate: Off</button>
+          <button class="menuBtn" id="btnMute" type="button">🔊 Music</button>
+          <button class="menuBtn" id="btnOpenSettings" type="button">⚙️</button>
+        </nav>
+
+        <!-- Mobile hamburger -->
+        <button class="hamburger" id="btnHamburger" type="button" aria-label="Open menu" aria-expanded="false">
+          <span></span><span></span><span></span>
+        </button>
+      </header>
+
+      <!-- Mobile dropdown -->
+      <div class="mobilePanel" id="mobilePanel" aria-hidden="true">
+        <button class="panelBtn" id="mOpenUploader" type="button">Upload Images</button>
+        <button class="panelBtn" id="mReset" type="button">Reset</button>
+        <button class="panelBtn" id="mAuto" type="button">Auto-Rotate: Off</button>
+        <button class="panelBtn" id="mMute" type="button">🔊 Music</button>
+        <button class="panelBtn" id="mOpenSettings" type="button">⚙️ Settings</button>
+      </div>
+
+      <main class="stage">
+        <canvas id="c"></canvas>
+
+        <div class="hint">
+          <div><b>Drag</b> to rotate</div>
+          <div><b>Scroll</b> to zoom</div>
+          <div><b>Double-click</b> to reset</div>
+          <div class="tiny">Tip: Upload your front/back images to start.</div>
+        </div>
+
+        <div id="loading" class="loading" style="display:none;">Loading…</div>
+
+        <!-- Uploader (shown by default) -->
+        <div id="picker" class="picker show" aria-hidden="false">
+          <div class="picker-card">
+            <div class="picker-title">Upload your card images</div>
+            <div class="picker-sub">
+              Choose a <b>Front</b> and <b>Back</b> image. Works on desktop + mobile, even on <code>file://</code>.
+            </div>
+
+            <div class="picker-grid">
+              <label class="filebox">
+                <span>Front image</span>
+                <input id="fileFront" type="file" accept="image/*" />
+              </label>
+
+              <label class="filebox">
+                <span>Back image</span>
+                <input id="fileBack" type="file" accept="image/*" />
+              </label>
+            </div>
+
+            <div class="picker-actions">
+              <button id="btnLoadFiles" class="btn primary" type="button">Load Card</button>
+              <button id="btnTryDefaults" class="btn" type="button">Try Default Filenames</button>
+            </div>
+
+            <div class="picker-note">
+              Default filenames (optional): <code>dante-front-card.png</code> and <code>backside.png</code>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <footer class="footer">
+        <span>Holographic foil enabled • Background music: Dante's World - Dark Void</span>
+      </footer>
+    </div>
+
+    <!-- Audio element for background music -->
+    <audio id="bgMusic" loop preload="auto">
+      <source src="Dante_s_World__Dark_Void.mp3" type="audio/mpeg">
+      Your browser does not support the audio element.
+    </audio>
+
+    <script src="https://unpkg.com/three@0.149.0/build/three.min.js"></script>
+    <script src="./index.js"></script>
+  </body>
+</html>

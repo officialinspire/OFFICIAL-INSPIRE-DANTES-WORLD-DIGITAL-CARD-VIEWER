@@ -1,0 +1,849 @@
+(() => {
+  if (!window.THREE) {
+    alert("Three.js failed to load. Check your internet connection and refresh.");
+    return;
+  }
+
+  // Default filenames (optional)
+  const DEFAULT_FRONT = "./dante-front-card.png";
+  const DEFAULT_BACK  = "./backside.png";
+
+  // Thin like a playing card
+  const CARD_THICKNESS = 0.008;
+
+  // DOM - Main App
+  const appEl = document.getElementById("app");
+  const canvas = document.getElementById("c");
+  const loadingEl = document.getElementById("loading");
+  const pickerEl = document.getElementById("picker");
+
+  const fileFront = document.getElementById("fileFront");
+  const fileBack = document.getElementById("fileBack");
+  const btnLoadFiles = document.getElementById("btnLoadFiles");
+  const btnTryDefaults = document.getElementById("btnTryDefaults");
+
+  const btnOpenUploader = document.getElementById("btnOpenUploader");
+  const btnReset = document.getElementById("btnReset");
+  const btnAuto = document.getElementById("btnAuto");
+  const btnMute = document.getElementById("btnMute");
+  const btnOpenSettings = document.getElementById("btnOpenSettings");
+
+  const btnHamburger = document.getElementById("btnHamburger");
+  const mobilePanel = document.getElementById("mobilePanel");
+  const mOpenUploader = document.getElementById("mOpenUploader");
+  const mReset = document.getElementById("mReset");
+  const mAuto = document.getElementById("mAuto");
+  const mMute = document.getElementById("mMute");
+  const mOpenSettings = document.getElementById("mOpenSettings");
+
+  // DOM - Start Menu
+  const startMenu = document.getElementById("startMenu");
+  const btnStartViewer = document.getElementById("btnStartViewer");
+  const btnImportCollection = document.getElementById("btnImportCollection");
+  const btnSettingsStart = document.getElementById("btnSettingsStart");
+
+  // DOM - Settings Modal
+  const settingsModal = document.getElementById("settingsModal");
+  const btnCloseSettings = document.getElementById("btnCloseSettings");
+  const musicVolumeSlider = document.getElementById("musicVolume");
+  const musicVolumeValue = document.getElementById("musicVolumeValue");
+  const sfxVolumeSlider = document.getElementById("sfxVolume");
+  const sfxVolumeValue = document.getElementById("sfxVolumeValue");
+  const graphicsQualitySelect = document.getElementById("graphicsQuality");
+  const foilIntensitySlider = document.getElementById("foilIntensity");
+  const foilIntensityValue = document.getElementById("foilIntensityValue");
+  const antialiasingCheckbox = document.getElementById("antialiasing");
+  const shadowsCheckbox = document.getElementById("shadows");
+  const btnApplySettings = document.getElementById("btnApplySettings");
+  const btnResetSettings = document.getElementById("btnResetSettings");
+
+  // Audio
+  const bgMusic = document.getElementById("bgMusic");
+  
+  // Settings State
+  let settings = {
+    musicVolume: 35,
+    sfxVolume: 80,
+    graphicsQuality: 'high',
+    foilIntensity: 85,
+    antialiasing: true,
+    shadows: true
+  };
+
+  let musicPlaying = false;
+  let musicMuted = false;
+  let userInteracted = false;
+
+  // State
+  let autoRotate = false;
+
+  // --- Audio Context for SFX ---
+  let audioCtx = null;
+  function ensureAudio() {
+    if (audioCtx) return;
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+
+  function clickSfx(type = "click") {
+    try {
+      ensureAudio();
+      if (audioCtx.state === "suspended") audioCtx.resume();
+
+      const t = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(type === "menu" ? 220 : 320, t);
+      osc.frequency.exponentialRampToValueAtTime(type === "menu" ? 140 : 200, t + 0.07);
+
+      const volume = (settings.sfxVolume / 100) * (type === "menu" ? 0.12 : 0.08);
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(volume, t + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.10);
+
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+
+      osc.start(t);
+      osc.stop(t + 0.11);
+    } catch {
+      // no-op
+    }
+  }
+
+  // --- Background Music Functions ---
+  function tryStartMusic() {
+    if (musicPlaying || musicMuted) return;
+    
+    console.log("Attempting to start music...");
+    bgMusic.volume = 0;
+    
+    const playPromise = bgMusic.play();
+    
+    if (playPromise !== undefined) {
+      playPromise.then(() => {
+        console.log("✓ Music started successfully!");
+        musicPlaying = true;
+        fadeInMusic(2.5);
+      }).catch(err => {
+        console.log("Music autoplay blocked:", err.message);
+        console.log("Will start on first user interaction...");
+      });
+    }
+  }
+
+  function startMusicOnInteraction() {
+    if (musicPlaying || userInteracted) return;
+    
+    userInteracted = true;
+    console.log("User interacted - starting music");
+    tryStartMusic();
+  }
+
+  // Add listeners for first user interaction
+  const interactionEvents = ['click', 'touchstart', 'keydown'];
+  interactionEvents.forEach(event => {
+    document.addEventListener(event, startMusicOnInteraction, { once: true });
+  });
+
+  function fadeInMusic(duration = 2.5) {
+    const targetVolume = musicMuted ? 0 : (settings.musicVolume / 100);
+    const startVolume = bgMusic.volume;
+    const startTime = performance.now();
+
+    function updateVolume(currentTime) {
+      const elapsed = (currentTime - startTime) / 1000;
+      const progress = Math.min(elapsed / duration, 1);
+      
+      // Smooth ease-in curve
+      const easedProgress = progress * progress;
+      bgMusic.volume = startVolume + (targetVolume - startVolume) * easedProgress;
+
+      if (progress < 1) {
+        requestAnimationFrame(updateVolume);
+      }
+    }
+
+    requestAnimationFrame(updateVolume);
+  }
+
+  function fadeOutMusic(duration = 1.2) {
+    const startVolume = bgMusic.volume;
+    const startTime = performance.now();
+
+    function updateVolume(currentTime) {
+      const elapsed = (currentTime - startTime) / 1000;
+      const progress = Math.min(elapsed / duration, 1);
+      
+      bgMusic.volume = startVolume * (1 - progress);
+
+      if (progress < 1) {
+        requestAnimationFrame(updateVolume);
+      } else {
+        bgMusic.pause();
+        musicPlaying = false;
+      }
+    }
+
+    requestAnimationFrame(updateVolume);
+  }
+
+  function toggleMusic() {
+    musicMuted = !musicMuted;
+    
+    if (musicMuted) {
+      fadeOutMusic(0.8);
+      btnMute.textContent = "🔇 Music";
+      mMute.textContent = "🔇 Music";
+    } else {
+      if (!musicPlaying) {
+        tryStartMusic();
+      } else {
+        fadeInMusic(0.8);
+      }
+      btnMute.textContent = "🔊 Music";
+      mMute.textContent = "🔊 Music";
+    }
+    
+    clickSfx("click");
+  }
+
+  // --- Settings Functions ---
+  function openSettingsModal() {
+    settingsModal.classList.add("show");
+    clickSfx("menu");
+  }
+
+  function closeSettingsModal() {
+    settingsModal.classList.remove("show");
+    clickSfx("menu");
+  }
+
+  function updateSettingsUI() {
+    musicVolumeSlider.value = settings.musicVolume;
+    musicVolumeValue.textContent = settings.musicVolume + "%";
+    
+    sfxVolumeSlider.value = settings.sfxVolume;
+    sfxVolumeValue.textContent = settings.sfxVolume + "%";
+    
+    graphicsQualitySelect.value = settings.graphicsQuality;
+    
+    foilIntensitySlider.value = settings.foilIntensity;
+    foilIntensityValue.textContent = settings.foilIntensity + "%";
+    
+    antialiasingCheckbox.checked = settings.antialiasing;
+    shadowsCheckbox.checked = settings.shadows;
+  }
+
+  function applySettings() {
+    // Update music volume
+    const targetVolume = musicMuted ? 0 : (settings.musicVolume / 100);
+    bgMusic.volume = targetVolume;
+    
+    // Apply graphics quality
+    applyGraphicsQuality();
+    
+    // Apply foil intensity
+    if (cardGroup && cardGroup.userData.foilMats) {
+      const intensity = settings.foilIntensity / 100;
+      cardGroup.userData.foilMats.forEach(mat => {
+        mat.uniforms.uIntensity.value = intensity;
+      });
+    }
+    
+    clickSfx("click");
+    closeSettingsModal();
+  }
+
+  function resetSettings() {
+    settings = {
+      musicVolume: 35,
+      sfxVolume: 80,
+      graphicsQuality: 'high',
+      foilIntensity: 85,
+      antialiasing: true,
+      shadows: true
+    };
+    
+    updateSettingsUI();
+    applySettings();
+  }
+
+  function applyGraphicsQuality() {
+    let pixelRatio;
+    switch(settings.graphicsQuality) {
+      case 'low':
+        pixelRatio = Math.min(window.devicePixelRatio * 0.5, 1);
+        break;
+      case 'medium':
+        pixelRatio = Math.min(window.devicePixelRatio * 0.75, 1.5);
+        break;
+      case 'high':
+        pixelRatio = Math.min(window.devicePixelRatio, 2);
+        break;
+      case 'ultra':
+        pixelRatio = Math.min(window.devicePixelRatio * 1.5, 3);
+        break;
+    }
+    renderer.setPixelRatio(pixelRatio);
+  }
+
+  // Settings UI event listeners
+  musicVolumeSlider.addEventListener('input', (e) => {
+    settings.musicVolume = parseInt(e.target.value);
+    musicVolumeValue.textContent = settings.musicVolume + "%";
+    if (!musicMuted && musicPlaying) {
+      bgMusic.volume = settings.musicVolume / 100;
+    }
+  });
+
+  sfxVolumeSlider.addEventListener('input', (e) => {
+    settings.sfxVolume = parseInt(e.target.value);
+    sfxVolumeValue.textContent = settings.sfxVolume + "%";
+  });
+
+  graphicsQualitySelect.addEventListener('change', (e) => {
+    settings.graphicsQuality = e.target.value;
+  });
+
+  foilIntensitySlider.addEventListener('input', (e) => {
+    settings.foilIntensity = parseInt(e.target.value);
+    foilIntensityValue.textContent = settings.foilIntensity + "%";
+  });
+
+  antialiasingCheckbox.addEventListener('change', (e) => {
+    settings.antialiasing = e.target.checked;
+  });
+
+  shadowsCheckbox.addEventListener('change', (e) => {
+    settings.shadows = e.target.checked;
+  });
+
+  btnCloseSettings.addEventListener('click', closeSettingsModal);
+  btnApplySettings.addEventListener('click', applySettings);
+  btnResetSettings.addEventListener('click', resetSettings);
+  btnOpenSettings.addEventListener('click', openSettingsModal);
+  mOpenSettings.addEventListener('click', () => {
+    openSettingsModal();
+    closeMobileMenu();
+  });
+  btnSettingsStart.addEventListener('click', openSettingsModal);
+
+  // Click outside to close settings
+  settingsModal.addEventListener('click', (e) => {
+    if (e.target === settingsModal) {
+      closeSettingsModal();
+    }
+  });
+
+  // --- Start Menu Functions ---
+  function hideStartMenu() {
+    startMenu.classList.add("hidden");
+    setTimeout(() => {
+      startMenu.style.display = "none";
+      appEl.classList.add("visible");
+    }, 500);
+  }
+
+  btnStartViewer.addEventListener("click", () => {
+    clickSfx("menu");
+    hideStartMenu();
+  });
+
+  btnImportCollection.addEventListener("click", () => {
+    clickSfx("menu");
+    alert("IMPORT COLLECTION feature coming soon! This will allow you to batch-load multiple cards.");
+  });
+
+  // Helpers
+  function setLoading(on, msg = "Loading…") {
+    loadingEl.textContent = msg;
+    loadingEl.style.display = on ? "grid" : "none";
+  }
+
+  function showPicker(show) {
+    pickerEl.classList.toggle("show", !!show);
+    pickerEl.setAttribute("aria-hidden", show ? "false" : "true");
+  }
+
+  function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+
+  // --- Three.js scene ---
+  const renderer = new THREE.WebGLRenderer({ 
+    canvas, 
+    antialias: settings.antialiasing, 
+    alpha: true 
+  });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+  const scene = new THREE.Scene();
+  scene.fog = new THREE.FogExp2(0x05060a, 0.04);
+
+  const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
+  camera.position.set(0, 0, 4.2);
+
+  scene.add(new THREE.AmbientLight(0xffffff, 0.85));
+  const key = new THREE.DirectionalLight(0xffffff, 1.1);
+  key.position.set(2.5, 2.5, 3.5);
+  if (settings.shadows) key.castShadow = true;
+  scene.add(key);
+
+  const rim = new THREE.DirectionalLight(0xffffff, 0.6);
+  rim.position.set(-3.0, -1.0, -2.5);
+  scene.add(rim);
+
+  const root = new THREE.Group();
+  scene.add(root);
+
+  let cardGroup = null;
+
+  function resize() {
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    const need =
+      canvas.width !== Math.floor(w * renderer.getPixelRatio()) ||
+      canvas.height !== Math.floor(h * renderer.getPixelRatio());
+
+    if (need) renderer.setSize(w, h, false);
+
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  }
+  window.addEventListener("resize", resize);
+
+  // --- Texture loading (reliable) ---
+  function loadTextureFromFile(file) {
+    return new Promise((resolve, reject) => {
+      if (!file) return reject(new Error("No file selected"));
+
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error("File read failed"));
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          const tex = new THREE.Texture(img);
+          tex.needsUpdate = true;
+          resolve(tex);
+        };
+        img.onerror = () => reject(new Error("Image decode failed"));
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function loadTextureFromURL(url) {
+    return new Promise((resolve, reject) => {
+      new THREE.TextureLoader().load(
+        url,
+        (tex) => resolve(tex),
+        undefined,
+        () => reject(new Error(`Could not load: ${url}`))
+      );
+    });
+  }
+
+  function prepTexture(tex) {
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+    tex.minFilter = THREE.LinearMipmapLinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    return tex;
+  }
+
+  function clearCard() {
+    if (!cardGroup) return;
+    root.remove(cardGroup);
+    cardGroup.traverse((obj) => {
+      if (obj.isMesh) {
+        obj.geometry?.dispose?.();
+        if (obj.material) {
+          if (Array.isArray(obj.material)) obj.material.forEach((m) => m.dispose());
+          else obj.material.dispose();
+        }
+      }
+    });
+    cardGroup = null;
+  }
+
+  // --- Holographic foil shader overlay ---
+  function makeFoilMaterial() {
+    return new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      uniforms: {
+        uTime: { value: 0 },
+        uIntensity: { value: settings.foilIntensity / 100 },
+        uBoost: { value: 1.0 },
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        varying vec3 vNormalW;
+        varying vec3 vPosW;
+        void main(){
+          vUv = uv;
+          vec4 wp = modelMatrix * vec4(position, 1.0);
+          vPosW = wp.xyz;
+          vNormalW = normalize(mat3(modelMatrix) * normal);
+          gl_Position = projectionMatrix * viewMatrix * wp;
+        }
+      `,
+      fragmentShader: `
+        precision highp float;
+        varying vec2 vUv;
+        varying vec3 vNormalW;
+        varying vec3 vPosW;
+        uniform float uTime;
+        uniform float uIntensity;
+        uniform float uBoost;
+
+        float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453123); }
+        float noise(vec2 p){
+          vec2 i=floor(p), f=fract(p);
+          float a=hash(i), b=hash(i+vec2(1,0)), c=hash(i+vec2(0,1)), d=hash(i+vec2(1,1));
+          vec2 u=f*f*(3.0-2.0*f);
+          return mix(a,b,u.x) + (c-a)*u.y*(1.0-u.x) + (d-b)*u.x*u.y;
+        }
+        vec3 hsv2rgb(vec3 c){
+          vec4 K=vec4(1.0,2.0/3.0,1.0/3.0,3.0);
+          vec3 p=abs(fract(c.xxx+K.xyz)*6.0-K.www);
+          return c.z * mix(K.xxx, clamp(p-K.xxx,0.0,1.0), c.y);
+        }
+
+        void main(){
+          vec3 V = normalize(cameraPosition - vPosW);
+          float fres = pow(1.0 - max(dot(normalize(vNormalW), V), 0.0), 2.0);
+
+          float n = noise(vUv*18.0 + vec2(uTime*0.35, -uTime*0.25));
+          float scan = sin((vUv.y*16.0) + uTime*2.7)*0.5+0.5;
+
+          float hue = fract(vUv.x*0.95 + vUv.y*0.35 + uTime*0.10 + n*0.22);
+          vec3 rainbow = hsv2rgb(vec3(hue, 0.9, 1.0));
+
+          float spark = step(0.987, noise(vUv*90.0 + uTime*1.25));
+
+          float mask = (0.35 + 0.65*scan) * (0.55 + 0.45*n);
+          float alpha = uIntensity * fres * mask * uBoost;
+
+          vec3 col = rainbow * alpha * 1.35 + spark * vec3(1.2) * fres * 0.25;
+          gl_FragColor = vec4(col, alpha);
+        }
+      `,
+    });
+  }
+
+  // --- Build the card with foil overlays on both sides ---
+  function createCard(frontTex, backTex) {
+    const imgW = frontTex.image?.width || 768;
+    const imgH = frontTex.image?.height || 1024;
+    const aspect = imgW / imgH;
+
+    const cardHeight = 2.9;
+    const cardWidth = cardHeight * aspect;
+    const thickness = CARD_THICKNESS;
+
+    const faceGeo = new THREE.PlaneGeometry(cardWidth, cardHeight);
+    const edgeGeo = new THREE.BoxGeometry(cardWidth, cardHeight, thickness);
+
+    const frontMat = new THREE.MeshStandardMaterial({
+      map: frontTex,
+      metalness: 0.25,
+      roughness: 0.35,
+    });
+
+    const backMat = new THREE.MeshStandardMaterial({
+      map: backTex,
+      metalness: 0.25,
+      roughness: 0.35,
+    });
+
+    const edgeMat = new THREE.MeshStandardMaterial({
+      color: 0x0b0b10,
+      metalness: 0.6,
+      roughness: 0.5,
+    });
+
+    const g = new THREE.Group();
+
+    const edge = new THREE.Mesh(edgeGeo, edgeMat);
+    g.add(edge);
+
+    const front = new THREE.Mesh(faceGeo, frontMat);
+    front.position.z = thickness / 2 + 0.001;
+    g.add(front);
+
+    const back = new THREE.Mesh(faceGeo, backMat);
+    back.position.z = -thickness / 2 - 0.001;
+    back.rotation.y = Math.PI;
+    g.add(back);
+
+    // Foil overlays
+    const foilFront = new THREE.Mesh(faceGeo, makeFoilMaterial());
+    foilFront.position.z = thickness / 2 + 0.0025;
+    g.add(foilFront);
+
+    const foilBack = new THREE.Mesh(faceGeo, makeFoilMaterial());
+    foilBack.position.z = -thickness / 2 - 0.0025;
+    foilBack.rotation.y = Math.PI;
+    g.add(foilBack);
+
+    g.userData.foilMats = [foilFront.material, foilBack.material];
+    return g;
+  }
+
+  // Controls (drag rotate)
+  let isPointerDown = false;
+  let lastX = 0, lastY = 0;
+  let velocityX = 0, velocityY = 0;
+
+  const rot = { x: -0.25, y: 0.65 };
+  const rotTarget = { x: rot.x, y: rot.y };
+
+  let zoom = 4.2;
+  let zoomTarget = zoom;
+
+  // Spin speed estimate (for foil boost)
+  let spinSpeed = 0;
+
+  function resetView() {
+    rotTarget.x = -0.25;
+    rotTarget.y = 0.65;
+    zoomTarget = 4.2;
+    velocityX = 0;
+    velocityY = 0;
+    clickSfx("click");
+  }
+
+  function onPointerDown(e) {
+    clickSfx("click");
+    isPointerDown = true;
+    canvas.setPointerCapture(e.pointerId);
+    lastX = e.clientX;
+    lastY = e.clientY;
+    velocityX = 0;
+    velocityY = 0;
+  }
+
+  function onPointerMove(e) {
+    if (!isPointerDown) return;
+
+    const dx = e.clientX - lastX;
+    const dy = e.clientY - lastY;
+    lastX = e.clientX;
+    lastY = e.clientY;
+
+    const s = 0.0065;
+    rotTarget.y += dx * s;
+    rotTarget.x += dy * s;
+    rotTarget.x = clamp(rotTarget.x, -1.4, 1.4);
+
+    velocityX = dx;
+    velocityY = dy;
+  }
+
+  function onPointerUp(e) {
+    isPointerDown = false;
+    try { canvas.releasePointerCapture(e.pointerId); } catch {}
+  }
+
+  function onWheel(e) {
+    e.preventDefault();
+    zoomTarget += e.deltaY * 0.0025;
+    zoomTarget = clamp(zoomTarget, 2.2, 8.0);
+  }
+
+  canvas.addEventListener("pointerdown", onPointerDown);
+  window.addEventListener("pointermove", onPointerMove);
+  window.addEventListener("pointerup", onPointerUp);
+  canvas.addEventListener("wheel", onWheel, { passive: false });
+  canvas.addEventListener("dblclick", resetView);
+
+  // UI syncing
+  function syncAutoLabels() {
+    const label = `Auto-Rotate: ${autoRotate ? "On" : "Off"}`;
+    btnAuto.textContent = label;
+    mAuto.textContent = label;
+  }
+
+  // Mobile menu
+  function toggleMobileMenu(force) {
+    const next = typeof force === "boolean" ? force : !mobilePanel.classList.contains("show");
+    mobilePanel.classList.toggle("show", next);
+    btnHamburger.setAttribute("aria-expanded", next ? "true" : "false");
+    mobilePanel.setAttribute("aria-hidden", next ? "false" : "true");
+    clickSfx("menu");
+  }
+
+  btnHamburger.addEventListener("click", () => toggleMobileMenu());
+  function closeMobileMenu() { toggleMobileMenu(false); }
+
+  // Open uploader
+  function openUploader() {
+    showPicker(true);
+    clickSfx("menu");
+  }
+
+  btnOpenUploader.addEventListener("click", openUploader);
+  mOpenUploader.addEventListener("click", () => { openUploader(); closeMobileMenu(); });
+
+  // Reset
+  btnReset.addEventListener("click", resetView);
+  mReset.addEventListener("click", () => { resetView(); closeMobileMenu(); });
+
+  // Auto rotate
+  btnAuto.addEventListener("click", () => {
+    autoRotate = !autoRotate;
+    syncAutoLabels();
+    clickSfx("click");
+  });
+  mAuto.addEventListener("click", () => {
+    autoRotate = !autoRotate;
+    syncAutoLabels();
+    clickSfx("click");
+    closeMobileMenu();
+  });
+
+  // Music toggle
+  btnMute.addEventListener("click", toggleMusic);
+  mMute.addEventListener("click", () => { 
+    toggleMusic(); 
+    closeMobileMenu(); 
+  });
+
+  // Load from selected files (primary)
+  btnLoadFiles.addEventListener("click", async () => {
+    clickSfx("click");
+    setLoading(true, "Loading selected images…");
+
+    try {
+      const f = fileFront.files?.[0];
+      const b = fileBack.files?.[0];
+      if (!f || !b) {
+        setLoading(false);
+        alert("Please select BOTH a front and back image.");
+        return;
+      }
+
+      const frontTex = prepTexture(await loadTextureFromFile(f));
+      const backTex = prepTexture(await loadTextureFromFile(b));
+
+      clearCard();
+      cardGroup = createCard(frontTex, backTex);
+      root.add(cardGroup);
+
+      cardGroup.rotation.x = rot.x;
+      cardGroup.rotation.y = rot.y;
+
+      showPicker(false);
+      setLoading(false);
+    } catch (err) {
+      console.error(err);
+      setLoading(false);
+      alert("Could not load images. Try PNG/JPG and try again.");
+      showPicker(true);
+    }
+  });
+
+  // Optional: try default filenames
+  btnTryDefaults.addEventListener("click", async () => {
+    clickSfx("click");
+    setLoading(true, "Trying default filenames…");
+
+    try {
+      const frontTex = prepTexture(await loadTextureFromURL(DEFAULT_FRONT));
+      const backTex = prepTexture(await loadTextureFromURL(DEFAULT_BACK));
+
+      clearCard();
+      cardGroup = createCard(frontTex, backTex);
+      root.add(cardGroup);
+
+      cardGroup.rotation.x = rot.x;
+      cardGroup.rotation.y = rot.y;
+
+      showPicker(false);
+      setLoading(false);
+    } catch (err) {
+      console.error(err);
+      setLoading(false);
+      alert("Default filenames not found. Use the uploader instead.");
+      showPicker(true);
+    }
+  });
+
+  // Animation loop
+  const clock = new THREE.Clock();
+
+  function animate() {
+    resize();
+    const dt = clock.getDelta();
+
+    if (!isPointerDown) {
+      const inertia = 0.0009;
+      rotTarget.y += velocityX * inertia;
+      rotTarget.x += velocityY * inertia;
+      rotTarget.x = clamp(rotTarget.x, -1.4, 1.4);
+
+      const damp = Math.pow(0.02, dt);
+      velocityX *= damp;
+      velocityY *= damp;
+    }
+
+    if (autoRotate && !isPointerDown) {
+      rotTarget.y += dt * 0.55;
+    }
+
+    const smooth = 1 - Math.pow(0.0008, dt);
+    const prevY = rot.y;
+
+    rot.x += (rotTarget.x - rot.x) * smooth;
+    rot.y += (rotTarget.y - rot.y) * smooth;
+
+    zoom += (zoomTarget - zoom) * smooth;
+    camera.position.z = zoom;
+
+    // spin speed for foil boost
+    spinSpeed = (rot.y - prevY) / Math.max(dt, 0.0001);
+
+    if (cardGroup) {
+      cardGroup.rotation.x = rot.x;
+      cardGroup.rotation.y = rot.y;
+
+      // Update foil animation
+      const foilMats = cardGroup.userData.foilMats;
+      if (foilMats) {
+        const boost = 1.0 + Math.min(1.0, Math.abs(spinSpeed) * 0.12);
+        for (const m of foilMats) {
+          m.uniforms.uTime.value += dt;
+          m.uniforms.uBoost.value = boost;
+        }
+      }
+    }
+
+    renderer.render(scene, camera);
+    requestAnimationFrame(animate);
+  }
+
+  // Boot sequence
+  (function start() {
+    updateSettingsUI();
+    syncAutoLabels();
+    showPicker(true);
+    setLoading(false);
+    resize();
+    animate();
+    
+    // Try to start music immediately
+    console.log("=== DANTESWORLD CARD VIEWER ===");
+    console.log("Audio file: Dante_s_World__Dark_Void.mp3");
+    console.log("Attempting autoplay...");
+    
+    // Try autoplay immediately
+    setTimeout(() => {
+      tryStartMusic();
+    }, 100);
+  })();
+})();
