@@ -790,7 +790,11 @@
       const { log: exportLog } = recordFingerprintEvent('exported');
       card.metadata = { ...(card.metadata || {}), fingerprintLog: exportLog };
       saveCurrentToBinder('exported');
-      dcard.download(card);
+      if (typeof JSZip !== 'undefined') {
+        await dcard.exportWithAssets(card);
+      } else {
+        dcard.download(card);
+      }
     } catch (err) {
       console.error(err);
       alert(`Unable to export .dcard: ${err.message}`);

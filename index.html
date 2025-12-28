@@ -8,7 +8,12 @@
   </head>
 
   <body>
-    <input id="fileDcard" type="file" accept=".dcard,application/json" style="display:none" />
+    <input
+      id="fileDcard"
+      type="file"
+      accept=".dcard,.zip,application/zip,application/json"
+      style="display:none"
+    />
     <!-- Start Menu (shown on page load) -->
     <div id="startMenu" class="start-menu">
       <div class="start-menu-content">
@@ -273,6 +278,7 @@
     </audio>
 
     <script src="https://unpkg.com/three@0.149.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
     <script src="./DCard-v2.js"></script>
     <script src="./index.js"></script>
   </body>
