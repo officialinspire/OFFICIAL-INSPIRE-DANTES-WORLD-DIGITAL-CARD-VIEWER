@@ -54,6 +54,7 @@
   const foilIntensityValue = document.getElementById("foilIntensityValue");
   const antialiasingCheckbox = document.getElementById("antialiasing");
   const shadowsCheckbox = document.getElementById("shadows");
+  const themeSelect = document.getElementById("themeSelect");
   const btnApplySettings = document.getElementById("btnApplySettings");
   const btnResetSettings = document.getElementById("btnResetSettings");
 
@@ -67,7 +68,35 @@
     graphicsQuality: 'high',
     foilIntensity: 85,
     antialiasing: true,
-    shadows: true
+    shadows: true,
+    theme: 'charcoal'
+  };
+
+  const THEMES = {
+    charcoal: {
+      label: "Charcoal / Shadow",
+      badge: "Midnight neutral with cool glow"
+    },
+    wood: {
+      label: "Warm Wood Studio",
+      badge: "Earthy amber glow"
+    },
+    granite: {
+      label: "Granite / Marble",
+      badge: "Stone with ice accents"
+    },
+    scifi: {
+      label: "Sci-Fi Hologrid",
+      badge: "Luminous cyan circuitry"
+    },
+    glass: {
+      label: "Glass Aurora",
+      badge: "Translucent blues + lilac"
+    },
+    void: {
+      label: "Midnight Void",
+      badge: "Purple black-hole sheen"
+    }
   };
 
   let musicPlaying = false;
@@ -115,7 +144,7 @@
   // --- Background Music Functions ---
   function tryStartMusic() {
     if (musicPlaying || musicMuted) return;
-    
+
     console.log("Attempting to start music...");
     bgMusic.volume = 0;
     
@@ -130,6 +159,14 @@
         console.log("Music autoplay blocked:", err.message);
         console.log("Will start on first user interaction...");
       });
+    }
+  }
+
+  function startMusicWithFade() {
+    userInteracted = true;
+    tryStartMusic();
+    if (musicPlaying && !musicMuted) {
+      fadeInMusic(1.5);
     }
   }
 
@@ -231,19 +268,23 @@
     
     foilIntensitySlider.value = settings.foilIntensity;
     foilIntensityValue.textContent = settings.foilIntensity + "%";
-    
+
     antialiasingCheckbox.checked = settings.antialiasing;
     shadowsCheckbox.checked = settings.shadows;
+    themeSelect.value = settings.theme;
   }
 
   function applySettings() {
     // Update music volume
     const targetVolume = musicMuted ? 0 : (settings.musicVolume / 100);
     bgMusic.volume = targetVolume;
-    
+
     // Apply graphics quality
     applyGraphicsQuality();
-    
+
+    // Apply theme
+    applyTheme(settings.theme);
+
     // Apply foil intensity
     if (cardGroup && cardGroup.userData.foilMats) {
       const intensity = settings.foilIntensity / 100;
@@ -263,7 +304,8 @@
       graphicsQuality: 'high',
       foilIntensity: 85,
       antialiasing: true,
-      shadows: true
+      shadows: true,
+      theme: 'charcoal'
     };
     
     updateSettingsUI();
@@ -287,6 +329,17 @@
         break;
     }
     renderer.setPixelRatio(pixelRatio);
+  }
+
+  function applyTheme(themeKey) {
+    const rootEl = document.documentElement;
+    rootEl.setAttribute('data-theme', themeKey);
+
+    // Update document meta for immersive vibes
+    const chosen = THEMES[themeKey];
+    if (chosen?.badge) {
+      rootEl.style.setProperty('--theme-note', `'${chosen.badge}'`);
+    }
   }
 
   // Settings UI event listeners
@@ -320,6 +373,11 @@
     settings.shadows = e.target.checked;
   });
 
+  themeSelect.addEventListener('change', (e) => {
+    settings.theme = e.target.value;
+    applyTheme(settings.theme);
+  });
+
   btnCloseSettings.addEventListener('click', closeSettingsModal);
   btnApplySettings.addEventListener('click', applySettings);
   btnResetSettings.addEventListener('click', resetSettings);
@@ -328,7 +386,10 @@
     openSettingsModal();
     closeMobileMenu();
   });
-  btnSettingsStart.addEventListener('click', openSettingsModal);
+  btnSettingsStart.addEventListener('click', () => {
+    startMusicWithFade();
+    openSettingsModal();
+  });
 
   // Click outside to close settings
   settingsModal.addEventListener('click', (e) => {
@@ -348,11 +409,13 @@
 
   btnStartViewer.addEventListener("click", () => {
     clickSfx("menu");
+    startMusicWithFade();
     hideStartMenu();
   });
 
   btnImportCollection.addEventListener("click", () => {
     clickSfx("menu");
+    startMusicWithFade();
     alert("IMPORT COLLECTION feature coming soon! This will allow you to batch-load multiple cards.");
   });
 
@@ -370,9 +433,9 @@
   function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
 
   // --- Three.js scene ---
-  const renderer = new THREE.WebGLRenderer({ 
-    canvas, 
-    antialias: settings.antialiasing, 
+  const renderer = new THREE.WebGLRenderer({
+    canvas,
+    antialias: settings.antialiasing,
     alpha: true 
   });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -831,14 +894,15 @@
   (function start() {
     updateSettingsUI();
     syncAutoLabels();
+    applyTheme(settings.theme);
     showPicker(true);
     setLoading(false);
     resize();
     animate();
     
     // Try to start music immediately
-    console.log("=== DANTESWORLD CARD VIEWER ===");
-    console.log("Audio file: Dante_s_World__Dark_Void.mp3");
+    console.log("=== .DCARD FILE FORMAT VIEWER by #teamInspire ===");
+    console.log("Audio file: Dante's World - Dark Void.mp3");
     console.log("Attempting autoplay...");
     
     // Try autoplay immediately
