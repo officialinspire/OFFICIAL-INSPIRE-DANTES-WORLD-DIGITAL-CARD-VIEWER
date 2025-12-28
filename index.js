@@ -939,7 +939,7 @@
   scene.fog = new THREE.FogExp2(0x05060a, 0.04);
 
   const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
-  camera.position.set(0, 0, 4.2);
+  camera.position.set(0, 0, ZOOM_DEFAULT);
 
   scene.add(new THREE.AmbientLight(0xffffff, 0.85));
   const key = new THREE.DirectionalLight(0xffffff, 1.1);
@@ -1203,10 +1203,14 @@
   let pinchStartZoom = null;
   let lastTapTime = 0;
 
+  const ZOOM_DEFAULT = 3.2;
+  const ZOOM_MIN = 2.0;
+  const ZOOM_MAX = 8.0;
+
   const rot = { x: -0.25, y: 0.65 };
   const rotTarget = { x: rot.x, y: rot.y };
 
-  let zoom = 4.2;
+  let zoom = ZOOM_DEFAULT;
   let zoomTarget = zoom;
 
   // Spin speed estimate (for foil boost)
@@ -1215,7 +1219,7 @@
   function resetView() {
     rotTarget.x = -0.25;
     rotTarget.y = 0.65;
-    zoomTarget = 4.2;
+    zoomTarget = ZOOM_DEFAULT;
     velocityX = 0;
     velocityY = 0;
     clickSfx("click");
@@ -1273,7 +1277,7 @@
         pinchStartZoom = zoomTarget;
       } else {
         const delta = (pinchStartDist - dist) * 0.01;
-        zoomTarget = clamp(pinchStartZoom + delta, 2.2, 8.0);
+        zoomTarget = clamp(pinchStartZoom + delta, ZOOM_MIN, ZOOM_MAX);
       }
       velocityX = 0;
       velocityY = 0;
@@ -1314,7 +1318,7 @@
   function onWheel(e) {
     e.preventDefault();
     zoomTarget += e.deltaY * 0.0025;
-    zoomTarget = clamp(zoomTarget, 2.2, 8.0);
+    zoomTarget = clamp(zoomTarget, ZOOM_MIN, ZOOM_MAX);
   }
 
   canvas.addEventListener("pointerdown", onPointerDown);
