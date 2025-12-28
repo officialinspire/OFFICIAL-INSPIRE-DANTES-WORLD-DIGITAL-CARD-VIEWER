@@ -859,4 +859,7 @@ class DCard {
 // Export for use
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = DCard;
+} else {
+  // Expose globally in the browser for the viewer to detect
+  window.DCard = DCard;
 }
