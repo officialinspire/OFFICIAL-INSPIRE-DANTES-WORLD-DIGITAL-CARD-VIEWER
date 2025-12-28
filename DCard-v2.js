@@ -865,16 +865,25 @@ class DCard {
         };
         img.src = e.target.result;
       };
-      
+
       reader.readAsDataURL(imageFile);
     });
   }
 }
 
+function attachDCardToGlobal() {
+  // Make the constructor available on the global object for the
+  // browser-based viewer (non-module script execution context).
+  if (typeof window !== 'undefined') {
+    window.DCard = DCard;
+  } else if (typeof globalThis !== 'undefined') {
+    globalThis.DCard = DCard;
+  }
+}
+
+attachDCardToGlobal();
+
 // Export for use
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = DCard;
-} else {
-  // Expose globally in the browser for the viewer to detect
-  window.DCard = DCard;
 }
