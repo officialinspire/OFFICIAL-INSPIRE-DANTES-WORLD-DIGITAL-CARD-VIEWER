@@ -102,13 +102,14 @@ body{
 }
 
 .visually-hidden-input{
-  position:fixed;
-  inset:0;
+  position:absolute;
   width:1px;
   height:1px;
   opacity:0;
   overflow:hidden;
-  clip-path:inset(50%);
+  clip:rect(0 0 0 0);
+  pointer-events:none;
+  inset:auto;
 }
 
 /* Start Menu */
