@@ -936,4 +936,6 @@ canvas#c{
   .settings-body{padding:16px}
   .settings-footer{flex-direction:column}
   .settings-footer .btn{width:100%}
+  .hint{left:12px;right:12px;bottom:12px;font-size:12px}
+  .hint .tiny{font-size:11px}
 }
