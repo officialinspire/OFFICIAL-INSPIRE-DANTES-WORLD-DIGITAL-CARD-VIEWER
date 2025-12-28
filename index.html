@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Dantesworld 3D Card Viewer</title>
+    <title>.dcard File Format Card Viewer | Inspire</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
 
@@ -11,9 +11,9 @@
     <!-- Start Menu (shown on page load) -->
     <div id="startMenu" class="start-menu">
       <div class="start-menu-content">
-        <img class="start-logo" src="./logo.png" alt="Dantesworld logo" />
-        <h1 class="start-title">DANTESWORLD</h1>
-        <p class="start-subtitle">3D Card Viewer</p>
+        <img class="start-logo" src="./inspire.png" alt="Inspire logo" />
+        <h1 class="start-title">.dcard FILE FORMAT</h1>
+        <p class="start-subtitle">CARD VIEWER · powered by #teamInspire</p>
         
         <div class="start-buttons">
           <button class="start-btn primary-start" id="btnStartViewer">
@@ -31,7 +31,7 @@
         </div>
         
         <div class="start-footer">
-          <p>Holographic 3D Card Viewer • @dantes20worlds</p>
+          <p>Universal 3D card explorer • Drop in any .dcard-ready art</p>
         </div>
       </div>
     </div>
@@ -89,6 +89,19 @@
             </div>
 
             <div class="setting-item">
+              <label for="themeSelect">Theme</label>
+              <select id="themeSelect" class="settings-select">
+                <option value="charcoal">Charcoal / Shadow</option>
+                <option value="wood">Warm Wood Studio</option>
+                <option value="granite">Granite / Marble</option>
+                <option value="scifi">Sci‑Fi Hologrid</option>
+                <option value="glass">Glass Aurora</option>
+                <option value="void">Midnight Void</option>
+              </select>
+              <p class="setting-hint">Pick a mood-matching palette for the .dcard viewer.</p>
+            </div>
+
+            <div class="setting-item">
               <label class="checkbox-label">
                 <input type="checkbox" id="antialiasing" checked />
                 <span>Anti-aliasing</span>
@@ -122,10 +135,10 @@
     <div id="app">
       <header class="topbar">
         <div class="leftBrand">
-          <img class="logo" src="./logo.png" alt="Dantesworld logo" />
+          <img class="logo" src="./inspire.png" alt="Inspire logo" />
           <div class="brandText">
-            <div class="brandTitle">Dantesworld</div>
-            <div class="brandSub">3D Card Viewer</div>
+            <div class="brandTitle">.dcard Card Viewer</div>
+            <div class="brandSub">Powered by #teamInspire</div>
           </div>
         </div>
 
@@ -191,20 +204,20 @@
             </div>
 
             <div class="picker-note">
-              Default filenames (optional): <code>dante-front-card.png</code> and <code>backside.png</code>
+              Default filenames (optional): <code>dante-front-card.png</code> and <code>backside.png</code> — plus <code>.dcard</code> packs coming soon.
             </div>
           </div>
         </div>
       </main>
 
       <footer class="footer">
-        <span>Holographic foil enabled • Background music: Dante's World - Dark Void</span>
+        <span>.dcard ready holographic foil • Background music: Dante's World - Dark Void</span>
       </footer>
     </div>
 
     <!-- Audio element for background music -->
     <audio id="bgMusic" loop preload="auto">
-      <source src="Dante_s_World__Dark_Void.mp3" type="audio/mpeg">
+      <source src="Dante's%20World%20-%20Dark%20Void.mp3" type="audio/mpeg">
       Your browser does not support the audio element.
     </audio>
 
