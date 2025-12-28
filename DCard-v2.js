@@ -420,6 +420,12 @@ class DCard {
             return;
           }
 
+          // Older .dcard exports may be missing a signature block entirely,
+          // which would previously throw and leave the UI stuck on the
+          // loading overlay. Normalize the structure so verification can run
+          // safely regardless of the source file.
+          card.signature = card.signature || {};
+
           const verified = await this.verify(card);
           card.signature.verified = verified;
 
@@ -473,6 +479,9 @@ class DCard {
       if (!this.validate(card)) {
         throw new Error('Invalid .dcard file format');
       }
+
+      // Normalize optional fields that may be missing from legacy exports.
+      card.signature = card.signature || {};
 
       // Helper function to load asset from zip
       const loadAsset = async (assetRef, folder) => {
