@@ -1198,6 +1198,10 @@
   let isPointerDown = false;
   let lastX = 0, lastY = 0;
   let velocityX = 0, velocityY = 0;
+  const activePointers = new Map();
+  let pinchStartDist = null;
+  let pinchStartZoom = null;
+  let lastTapTime = 0;
 
   const rot = { x: -0.25, y: 0.65 };
   const rotTarget = { x: rot.x, y: rot.y };
@@ -1217,18 +1221,64 @@
     clickSfx("click");
   }
 
+  const storePointer = (e) => {
+    activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  };
+
+  const getPointerDistance = () => {
+    const pts = Array.from(activePointers.values());
+    if (pts.length < 2) return 0;
+    const dx = pts[0].x - pts[1].x;
+    const dy = pts[0].y - pts[1].y;
+    return Math.sqrt(dx * dx + dy * dy);
+  };
+
   function onPointerDown(e) {
     clickSfx("click");
+    storePointer(e);
     isPointerDown = true;
     canvas.setPointerCapture(e.pointerId);
-    lastX = e.clientX;
-    lastY = e.clientY;
-    velocityX = 0;
-    velocityY = 0;
+
+    const now = Date.now();
+    if (e.pointerType === "touch" && now - lastTapTime < 350) {
+      resetView();
+    }
+    lastTapTime = now;
+
+    if (activePointers.size === 1) {
+      lastX = e.clientX;
+      lastY = e.clientY;
+      velocityX = 0;
+      velocityY = 0;
+      pinchStartDist = null;
+      pinchStartZoom = null;
+    } else if (activePointers.size === 2) {
+      pinchStartDist = getPointerDistance();
+      pinchStartZoom = zoomTarget;
+      velocityX = 0;
+      velocityY = 0;
+    }
   }
 
   function onPointerMove(e) {
     if (!isPointerDown) return;
+
+    storePointer(e);
+    const pointers = Array.from(activePointers.values());
+
+    if (pointers.length >= 2) {
+      const dist = getPointerDistance();
+      if (!pinchStartDist) {
+        pinchStartDist = dist;
+        pinchStartZoom = zoomTarget;
+      } else {
+        const delta = (pinchStartDist - dist) * 0.01;
+        zoomTarget = clamp(pinchStartZoom + delta, 2.2, 8.0);
+      }
+      velocityX = 0;
+      velocityY = 0;
+      return;
+    }
 
     const dx = e.clientX - lastX;
     const dy = e.clientY - lastY;
@@ -1245,7 +1295,19 @@
   }
 
   function onPointerUp(e) {
-    isPointerDown = false;
+    activePointers.delete(e.pointerId);
+    pinchStartDist = null;
+    pinchStartZoom = null;
+
+    if (activePointers.size === 0) {
+      isPointerDown = false;
+    } else {
+      const remaining = activePointers.values().next().value;
+      lastX = remaining.x;
+      lastY = remaining.y;
+      isPointerDown = true;
+    }
+
     try { canvas.releasePointerCapture(e.pointerId); } catch {}
   }
 
