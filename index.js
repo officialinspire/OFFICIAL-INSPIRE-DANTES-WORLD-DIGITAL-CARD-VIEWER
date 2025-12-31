@@ -989,75 +989,96 @@
     }
   }
 
-    function persistBinderState() {
-      const encoder = new TextEncoder();
-      const serialize = () => JSON.stringify(binderState);
-      const getByteSize = () => encoder.encode(serialize()).length;
-      const MAX_BYTES = 4.5 * 1024 * 1024; // ~4.5MB budget to stay under localStorage limits
-      const save = () => localStorage.setItem(BINDER_KEY, serialize());
-      const isQuotaError = (err) => err?.name === 'QuotaExceededError' || err?.code === 22 || err?.code === 1014;
+  function stripAssetData(asset) {
+    if (!asset) return null;
+    const { data, ...rest } = asset;
+    return rest;
+  }
 
-      // Proactively trim if the serialized payload is already too large for localStorage
-      let removed = 0;
-      let firstRemovedCard = null;
-      let size = getByteSize();
-
-      while (size > MAX_BYTES && binderState.cards.length > 1) {
-        const removedCard = binderState.cards.shift();
-        if (!firstRemovedCard) firstRemovedCard = removedCard;
-        removed += 1;
-        size = getByteSize();
+  function serializeBinderForStorage(state) {
+    const sanitizedCards = state.cards.map((card) => {
+      if (card.storageKey) {
+        return {
+          ...card,
+          frontAsset: stripAssetData(card.frontAsset),
+          backAsset: stripAssetData(card.backAsset),
+        };
       }
+      return card;
+    });
 
-      if (size > MAX_BYTES) {
-        console.warn("Latest binder entry is too large to persist", { size });
-        renderBinder();
-        alert("This card is too large for the browser binder. Please export it or clear older entries first.");
-        return;
-      }
+    return JSON.stringify({ ...state, cards: sanitizedCards });
+  }
 
-      if (removed > 0) {
-        renderBinder();
-        alert(
-          `Binder storage was almost full. Removed ${removed} entr${removed === 1 ? 'y' : 'ies'} ` +
-          (firstRemovedCard ? `starting with "${firstRemovedCard?.name || 'a card'}" ` : '') +
-          `to make room for the latest card.`
-        );
-      }
+  function persistBinderState() {
+    const encoder = new TextEncoder();
+    const serialize = () => serializeBinderForStorage(binderState);
+    const getByteSize = () => encoder.encode(serialize()).length;
+    const MAX_BYTES = 4.5 * 1024 * 1024; // ~4.5MB budget to stay under localStorage limits
+    const save = () => localStorage.setItem(BINDER_KEY, serialize());
+    const isQuotaError = (err) => err?.name === 'QuotaExceededError' || err?.code === 22 || err?.code === 1014;
+
+    // Proactively trim if the serialized payload is already too large for localStorage
+    let removed = 0;
+    let firstRemovedCard = null;
+    let size = getByteSize();
+
+    while (size > MAX_BYTES && binderState.cards.length > 1) {
+      const removedCard = binderState.cards.shift();
+      if (!firstRemovedCard) firstRemovedCard = removedCard;
+      removed += 1;
+      size = getByteSize();
+    }
+
+    if (size > MAX_BYTES) {
+      console.warn("Latest binder entry is too large to persist", { size });
+      renderBinder();
+      alert("This card is too large for the browser binder. Please export it or clear older entries first.");
+      return;
+    }
+
+    if (removed > 0) {
+      renderBinder();
+      alert(
+        `Binder storage was almost full. Removed ${removed} entr${removed === 1 ? 'y' : 'ies'} ` +
+        (firstRemovedCard ? `starting with "${firstRemovedCard?.name || 'a card'}" ` : '') +
+        `to make room for the latest card.`
+      );
+    }
+
+    try {
+      save();
+      return;
+    } catch (err) {
+      console.warn("Failed to persist binder", err);
+      if (!isQuotaError(err)) return;
+    }
+
+    // Try to reclaim space by trimming the oldest entries when storage is full.
+    let removedDuringRecovery = 0;
+
+    while (binderState.cards.length > 0) {
+      const removedCard = binderState.cards.shift();
+      removedDuringRecovery += 1;
 
       try {
         save();
+        renderBinder();
+        alert(
+          `Binder storage was full. Removed ${removedDuringRecovery} entr${removedDuringRecovery === 1 ? 'y' : 'ies'} ` +
+          `starting with "${removedCard?.name || 'a card'}" to save the latest card.`
+        );
         return;
       } catch (err) {
-        console.warn("Failed to persist binder", err);
-        if (!isQuotaError(err)) return;
-      }
-
-      // Try to reclaim space by trimming the oldest entries when storage is full.
-      let removedDuringRecovery = 0;
-
-      while (binderState.cards.length > 0) {
-        const removedCard = binderState.cards.shift();
-        removedDuringRecovery += 1;
-
-        try {
-          save();
-          renderBinder();
-          alert(
-            `Binder storage was full. Removed ${removedDuringRecovery} entr${removedDuringRecovery === 1 ? 'y' : 'ies'} ` +
-            `starting with "${removedCard?.name || 'a card'}" to save the latest card.`
-          );
-          return;
-        } catch (err) {
-          if (!isQuotaError(err)) {
-            console.warn("Unexpected error while trimming binder", err);
-            break;
-          }
+        if (!isQuotaError(err)) {
+          console.warn("Unexpected error while trimming binder", err);
+          break;
         }
       }
-
-      alert("Binder storage is full and could not save. Please export or clear entries.");
     }
+
+    alert("Binder storage is full and could not save. Please export or clear entries.");
+  }
 
   function normalizeFingerprintLog(log) {
     return Array.isArray(log) ? log : [];
@@ -1106,6 +1127,51 @@
     return entry;
   }
 
+  async function cacheBinderAssets(entry) {
+    if (!entry || !window.DCardStorage) return entry;
+
+    const storageKey = entry.fingerprint || entry.id;
+    if (!storageKey) return entry;
+
+    const card = loadedCardData
+      ? JSON.parse(JSON.stringify(loadedCardData))
+      : {
+          format: 'dcard',
+          version: '2.0',
+          metadata: entry.meta || {},
+          assets: {
+            cardFront: lastFrontAsset,
+            cardBack: lastBackAsset,
+          },
+        };
+
+    card.metadata = card.metadata || entry.meta || {};
+    card.assets = card.assets || {};
+    card.assets.cardFront = card.assets.cardFront || lastFrontAsset;
+    card.assets.cardBack = card.assets.cardBack || lastBackAsset;
+
+    if (loadedCardData?.assets?.audio?.theme) {
+      card.assets.audio = { ...(card.assets.audio || {}), theme: loadedCardData.assets.audio.theme };
+    }
+
+    try {
+      await window.DCardStorage.saveCard({
+        fingerprint: storageKey,
+        cardObj: card,
+        verified: loadedMeta?.verified,
+        unsigned: loadedMeta?.unsigned,
+        addedAt: entry.savedAt,
+      });
+      entry.storageKey = storageKey;
+      entry.frontAsset = card.assets.cardFront || entry.frontAsset;
+      entry.backAsset = card.assets.cardBack || entry.backAsset;
+    } catch (err) {
+      console.warn('IndexedDB save failed', err);
+    }
+
+    return entry;
+  }
+
   function upsertBinderEntry(entry) {
     if (!entry) return;
     const idx = binderState.cards.findIndex((c) => c.id === entry.id || (entry.fingerprint && c.fingerprint === entry.fingerprint));
@@ -1118,9 +1184,30 @@
     renderBinder();
   }
 
-  function saveCurrentToBinder(status = 'stored') {
+  async function resolveBinderEntryAssets(entry) {
+    let front = entry.frontAsset;
+    let back = entry.backAsset;
+    let cardData = null;
+
+    const storageKey = entry.storageKey || entry.fingerprint;
+    if ((!front?.data || !back?.data) && storageKey && window.DCardStorage) {
+      try {
+        const stored = await window.DCardStorage.getCard(storageKey);
+        cardData = stored?.cardObj || stored;
+        front = cardData?.assets?.cardFront || front;
+        back = cardData?.assets?.cardBack || back;
+      } catch (err) {
+        console.warn('Failed to hydrate binder assets from storage', err);
+      }
+    }
+
+    return { front, back, cardData };
+  }
+
+  async function saveCurrentToBinder(status = 'stored') {
     const entry = snapshotCurrentCard(status);
-    upsertBinderEntry(entry);
+    const hydratedEntry = await cacheBinderAssets(entry);
+    upsertBinderEntry(hydratedEntry);
   }
 
   function moveBinderEntry(id, direction = -1) {
@@ -1140,20 +1227,26 @@
     if (!card) return;
     setLoading(true, "Loading from binder…");
     try {
-      const frontTex = await textureFromAsset(card.frontAsset);
-      const backTex = await textureFromAsset(card.backAsset);
+      const { front, back, cardData } = await resolveBinderEntryAssets(card);
+      if (!front?.data || !back?.data) {
+        throw new Error('Card assets missing from binder');
+      }
+
+      const frontTex = await textureFromAsset(front);
+      const backTex = await textureFromAsset(back);
 
       clearCard();
       cardGroup = createCard(frontTex, backTex);
       root.add(cardGroup);
 
-      loadedMeta = { ...(card.meta || {}), binderId: card.id, fingerprintLog: card.fingerprintLog || [] };
-      loadedCardData = null;
-      lastFrontAsset = card.frontAsset;
-      lastBackAsset = card.backAsset;
+      const metaSource = cardData?.metadata || card.meta || {};
+      loadedMeta = { ...metaSource, binderId: card.id, fingerprintLog: card.fingerprintLog || metaSource.fingerprintLog || [] };
+      loadedCardData = cardData || null;
+      lastFrontAsset = front;
+      lastBackAsset = back;
 
       updateCardInfo(loadedMeta || {});
-      updateVerificationBadge({ status: 'unsigned', reason: 'Binder card (no signature)' });
+      updateVerificationBadge(cardData ? (cardData.signature || {}) : { status: 'unsigned', reason: 'Binder card (no signature)' });
 
       cardGroup.rotation.x = rot.x;
       cardGroup.rotation.y = rot.y;
@@ -1161,6 +1254,7 @@
       showPicker(false);
       hideStartMenu();
       closeBinder();
+      if (cardData) handleCardAudio(cardData);
     } catch (err) {
       console.error(err);
       alert("Unable to load card from binder.");
@@ -1318,7 +1412,7 @@
 
     updateCardInfo(loadedMeta || {});
     updateVerificationBadge(security || {});
-    saveCurrentToBinder('stored');
+    await saveCurrentToBinder('stored');
 
     cardGroup.rotation.x = rot.x;
     cardGroup.rotation.y = rot.y;
@@ -1347,7 +1441,7 @@
     }
 
     recordFingerprintEvent('traded');
-    saveCurrentToBinder('stored');
+    await saveCurrentToBinder('stored');
 
     const tradeUrl = `${location.origin}${location.pathname}?import=/cards/${fp}.dcard`;
     if (window.TradeQR?.openTradeModal) {
@@ -1424,7 +1518,7 @@
 
       const { log: exportLog } = recordFingerprintEvent('exported');
       card.metadata = { ...(card.metadata || {}), fingerprintLog: exportLog };
-      saveCurrentToBinder('exported');
+      await saveCurrentToBinder('exported');
       if (typeof JSZip !== 'undefined') {
         await dcard.exportWithAssets(card);
       } else {
@@ -1965,7 +2059,7 @@
       cardGroup.rotation.x = rot.x;
       cardGroup.rotation.y = rot.y;
 
-      saveCurrentToBinder('stored');
+      await saveCurrentToBinder('stored');
       showPicker(false);
       setLoading(false);
     } catch (err) {
@@ -2007,7 +2101,7 @@
       cardGroup.rotation.x = rot.x;
       cardGroup.rotation.y = rot.y;
 
-      saveCurrentToBinder('stored');
+      await saveCurrentToBinder('stored');
       showPicker(false);
       setLoading(false);
     } catch (err) {
