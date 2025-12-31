@@ -577,14 +577,14 @@
 
   function fadeAudioVolume(el, targetVolume, duration = 1.0, onComplete) {
     if (!el) return;
-
-    const startVolume = el.volume;
+    const clampedTarget = clamp(targetVolume, 0, 1);
+    const startVolume = clamp(el.volume ?? 0, 0, 1);
     const startTime = performance.now();
 
     function updateVolume(currentTime) {
       const elapsed = (currentTime - startTime) / 1000;
       const progress = Math.min(elapsed / duration, 1);
-      el.volume = startVolume + (targetVolume - startVolume) * progress;
+      el.volume = clamp(startVolume + (clampedTarget - startVolume) * progress, 0, 1);
 
       if (progress < 1) {
         requestAnimationFrame(updateVolume);
@@ -956,11 +956,41 @@
   }
 
   function persistBinderState() {
+    const save = () => localStorage.setItem(BINDER_KEY, JSON.stringify(binderState));
+    const isQuotaError = (err) => err?.name === 'QuotaExceededError' || err?.code === 22 || err?.code === 1014;
+
     try {
-      localStorage.setItem(BINDER_KEY, JSON.stringify(binderState));
+      save();
+      return;
     } catch (err) {
       console.warn("Failed to persist binder", err);
+      if (!isQuotaError(err)) return;
     }
+
+    // Try to reclaim space by trimming the oldest entries when storage is full.
+    let removed = 0;
+
+    while (binderState.cards.length > 0) {
+      const removedCard = binderState.cards.shift();
+      removed += 1;
+
+      try {
+        save();
+        renderBinder();
+        alert(
+          `Binder storage was full. Removed ${removed} entr${removed === 1 ? 'y' : 'ies'} ` +
+          `starting with "${removedCard?.name || 'a card'}" to save the latest card.`
+        );
+        return;
+      } catch (err) {
+        if (!isQuotaError(err)) {
+          console.warn("Unexpected error while trimming binder", err);
+          break;
+        }
+      }
+    }
+
+    alert("Binder storage is full and could not save. Please export or clear entries.");
   }
 
   function normalizeFingerprintLog(log) {
