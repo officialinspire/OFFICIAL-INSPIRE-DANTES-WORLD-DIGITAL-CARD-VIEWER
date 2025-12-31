@@ -116,9 +116,16 @@
       return;
     }
 
+    userInteracted = true;
+
     const audioSettings = card.assets.audio.settings || {};
-    fadeOutMusic(audioSettings.fadeOut ?? 1.0);
-    playCardAudio(card);
+    const onFadeComplete = () => playCardAudio(card);
+
+    if (bgMusic && !bgMusic.paused) {
+      fadeOutMusic(audioSettings.fadeOut ?? 1.0, onFadeComplete);
+    } else {
+      onFadeComplete();
+    }
   }
 
   if (!window.DCard) {
@@ -568,7 +575,8 @@
       requestAnimationFrame(updateVolume);
     }
 
-    function fadeOutMusic(duration = 1.2) {
+    function fadeOutMusic(duration = 1.2, onComplete) {
+      musicPlaying = false;
       const startVolume = clamp(bgMusic.volume ?? 0, 0, 1);
       const startTime = performance.now();
 
@@ -582,8 +590,10 @@
           requestAnimationFrame(updateVolume);
         } else {
           bgMusic.pause();
-          musicPlaying = false;
           updateMusicStatus();
+          if (typeof onComplete === 'function') {
+            onComplete();
+          }
         }
       }
 
